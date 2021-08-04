@@ -17,7 +17,7 @@ func main() {
 		Name:        "多文件下载",
 		HelpName:    "downloader",
 		Usage:       "通过参数控制,实现并发下载",
-		Version:     "v0.0.1",
+		Version:     "v0.0.2",
 		Description: "支持断点续传,多线程并发的酷酷的下载器",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -37,12 +37,19 @@ func main() {
 				Value:   concurrentNum,
 				Usage:   "Concurrency `number`",
 			},
+			&cli.BoolFlag{
+				Name:    "resume",
+				Aliases: []string{"r"},
+				Value:   true,
+				Usage:   "Resume download",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			strURL := c.String("url")
 			filename := c.String("output")
 			concurrency := c.Int("concurrency")
-			return NewDownloader(concurrency).Download(strURL, filename)
+			resume := c.Bool("resume")
+			return NewDownloader(concurrency, resume).Download(strURL, filename)
 		},
 		CommandNotFound: func(*cli.Context, string) { panic("没有这个命令哦") },
 		OnUsageError:    func(*cli.Context, error, bool) error { panic("您的用法不对哦") },
