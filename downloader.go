@@ -42,6 +42,7 @@ func (d *Downloader) Download(strUrl, filename string) error {
 }
 
 func (d *Downloader) multiDownload(url string, filename string, contentLen int64) error {
+	log.Printf("多线程下载开启,共%d线程", d.concurrentNum)
 	d.setBar(int(contentLen))
 	partSize := contentLen / int64(d.concurrentNum)
 
@@ -58,7 +59,8 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 	var rangeStart int64
 	for i := 0; i < d.concurrentNum; i++ {
 		go func(i int, rangeStart int64) {
-			wg.Done()
+			defer wg.Done()
+
 			rangeEnd := rangeStart + partSize
 			if rangeEnd >= contentLen {
 				rangeEnd = contentLen
@@ -77,7 +79,9 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 
 		rangeStart += partSize + 1
 	}
+
 	wg.Wait()
+
 	//合并文件
 	err := d.mergeFile(filename)
 	if err != nil {
@@ -87,6 +91,7 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 }
 
 func (d *Downloader) singleDownload(url string, filename string) error {
+	log.Println("单线程下载")
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -111,7 +116,7 @@ func (d *Downloader) singleDownload(url string, filename string) error {
 	}(destFile)
 
 	buf := make([]byte, 32*1024)
-	_, err = io.CopyBuffer(destFile, resp.Body, buf)
+	_, err = io.CopyBuffer(io.MultiWriter(destFile, d.bar), resp.Body, buf)
 	if err != nil {
 		if err == io.EOF {
 			return nil
@@ -175,6 +180,7 @@ func (d *Downloader) getPartFilename(filename string, partNum int) string {
 }
 
 func (d *Downloader) mergeFile(filename string) error {
+	log.Println("\n正在整合下载文件...")
 	destFile, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
