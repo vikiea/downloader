@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -48,7 +49,7 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 
 	// 创建部分文件的存放目录
 	partDir := d.getPartDir(filename)
-	_ = os.Mkdir(partDir, 0777)
+
 	defer func(path string) {
 		_ = os.RemoveAll(path)
 	}(partDir)
@@ -87,6 +88,7 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println("下载完成!")
 	return nil
 }
 
@@ -106,6 +108,10 @@ func (d *Downloader) singleDownload(url string, filename string) error {
 
 	d.setBar(int(resp.ContentLength))
 
+	fileDir := path.Dir(filename)
+	if !d.isExist(fileDir) {
+		_ = os.MkdirAll(fileDir, 0777)
+	}
 	flags := os.O_CREATE | os.O_WRONLY
 	destFile, err := os.OpenFile(filename, flags, 0666)
 	if err != nil {
@@ -170,13 +176,20 @@ func (d *Downloader) downloadPartial(url string, filename string, rangeStart, ra
 
 // getPartDir 部分文件存放的目录
 func (d *Downloader) getPartDir(filename string) string {
-	return strings.SplitN(filename, ".", 2)[0]
+	fileDir, basename := filepath.Split(filename)
+	partDir := strings.SplitN(basename, ".", 2)[0]
+	filePath := filepath.Join(fileDir, partDir)
+	if !d.isExist(filePath) {
+		_ = os.MkdirAll(filePath, 0777)
+	}
+	return filePath
 }
 
 // getPartFilename 构造部分文件的名字
 func (d *Downloader) getPartFilename(filename string, partNum int) string {
+	_, basename := filepath.Split(filename)
 	partDir := d.getPartDir(filename)
-	return fmt.Sprintf("%s/%s-%d", partDir, filename, partNum)
+	return fmt.Sprintf("%s/%s-%d", partDir, basename, partNum)
 }
 
 func (d *Downloader) mergeFile(filename string) error {
@@ -199,9 +212,9 @@ func (d *Downloader) mergeFile(filename string) error {
 	return nil
 }
 
-func (d *Downloader) setBar(contentLen int) {
+func (d *Downloader) setBar(length int) {
 	d.bar = progressbar.NewOptions(
-		contentLen,
+		length,
 		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowBytes(true),
@@ -215,4 +228,16 @@ func (d *Downloader) setBar(contentLen int) {
 			BarEnd:        "]",
 		}),
 	)
+}
+
+// isExist 判断所给路径文件/文件夹是否存在(返回true是存在)
+func (d *Downloader) isExist(path string) bool {
+	_, err := os.Stat(path) //os.Stat获取文件信息
+	if err != nil {
+		if os.IsExist(err) {
+			return true
+		}
+		return false
+	}
+	return true
 }

@@ -17,7 +17,7 @@ func main() {
 		Name:        "多文件下载",
 		HelpName:    "downloader",
 		Usage:       "通过参数控制,实现并发下载",
-		Version:     "v0.0.2",
+		Version:     "v0.0.3",
 		Description: "支持断点续传,多线程并发的酷酷的下载器",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
