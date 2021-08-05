@@ -37,10 +37,15 @@ func (d *Downloader) Download(strUrl, filename string) error {
 		return err
 	}
 
-	if resp.StatusCode == http.StatusOK && resp.Header.Get("Accept-Ranges") == "bytes" {
-		return d.multiDownload(strUrl, filename, resp.ContentLength)
+	if resp.StatusCode == http.StatusOK {
+		if resp.Header.Get("Accept-Ranges") == "bytes" {
+			return d.multiDownload(strUrl, filename, resp.ContentLength)
+		} else {
+			return d.singleDownload(strUrl, filename)
+		}
 	} else {
-		return d.singleDownload(strUrl, filename)
+		log.Fatal(resp.Status)
+		return nil
 	}
 }
 
