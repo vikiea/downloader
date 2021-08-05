@@ -44,8 +44,10 @@ func (d *Downloader) Download(strUrl, filename string) error {
 
 func (d *Downloader) multiDownload(url string, filename string, contentLen int64) error {
 	log.Printf("多线程下载开启,共%d线程", d.concurrentNum)
-	d.setBar(int(contentLen))
+	log.Printf("数据总大小:%d", contentLen)
+	d.setBar(contentLen)
 	partSize := contentLen / int64(d.concurrentNum)
+	log.Printf("每块数据大小:%d", partSize)
 
 	// 创建部分文件的存放目录
 	partDir := d.getPartDir(filename)
@@ -57,26 +59,28 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 	var wg sync.WaitGroup
 	wg.Add(d.concurrentNum)
 
-	var rangeStart int64
+	var rangeStart, rangeEnd int64
 	for i := 0; i < d.concurrentNum; i++ {
-		go func(i int, rangeStart int64) {
+		rangeEnd = rangeStart + partSize
+
+		go func(i int, rangeStart, rangeEnd int64) {
 			defer wg.Done()
 
-			rangeEnd := rangeStart + partSize
-			if rangeEnd >= contentLen {
-				rangeEnd = contentLen
+			if i == d.concurrentNum-1 {
+				rangeEnd = contentLen - 1
 			}
-			downloaded := 0
+			log.Printf("线程%d,起始长度%d,结束长度%d", i, rangeStart, rangeEnd)
+			var downloaded int64
 			if d.resume {
 				partFilename := d.getPartFilename(filename, i)
 				content, err := ioutil.ReadFile(partFilename)
 				if err == nil {
-					downloaded = len(content)
+					downloaded = int64(len(content))
 				}
-				_ = d.bar.Add(downloaded)
+				_ = d.bar.Add64(downloaded)
 			}
-			d.downloadPartial(url, filename, rangeStart+int64(downloaded), rangeEnd, i)
-		}(i, rangeStart)
+			d.downloadPartial(url, filename, rangeStart+downloaded, rangeEnd, i)
+		}(i, rangeStart, rangeEnd)
 
 		rangeStart += partSize + 1
 	}
@@ -88,6 +92,7 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 	if err != nil {
 		log.Fatal(err)
 	}
+	_ = d.bar.Finish()
 	log.Println("下载完成!")
 	return nil
 }
@@ -106,7 +111,7 @@ func (d *Downloader) singleDownload(url string, filename string) error {
 		_ = Body.Close()
 	}(resp.Body)
 
-	d.setBar(int(resp.ContentLength))
+	d.setBar(resp.ContentLength)
 
 	fileDir := path.Dir(filename)
 	if !d.isExist(fileDir) {
@@ -212,8 +217,8 @@ func (d *Downloader) mergeFile(filename string) error {
 	return nil
 }
 
-func (d *Downloader) setBar(length int) {
-	d.bar = progressbar.NewOptions(
+func (d *Downloader) setBar(length int64) {
+	d.bar = progressbar.NewOptions64(
 		length,
 		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
 		progressbar.OptionEnableColorCodes(true),
