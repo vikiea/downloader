@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/vikieq/downloader/utils"
 	"io"
 	"io/ioutil"
 	"log"
@@ -20,10 +21,11 @@ type Downloader struct {
 	concurrentNum int
 	resume        bool
 	bar           *progressbar.ProgressBar
+	detail        bool
 }
 
-func NewDownloader(concurrentNum int, resume bool) *Downloader {
-	return &Downloader{concurrentNum: concurrentNum, resume: resume}
+func NewDownloader(concurrentNum int, resume, detail bool) *Downloader {
+	return &Downloader{concurrentNum: concurrentNum, resume: resume, detail: detail}
 }
 
 func (d *Downloader) Download(strUrl, filename string) error {
@@ -44,10 +46,9 @@ func (d *Downloader) Download(strUrl, filename string) error {
 
 func (d *Downloader) multiDownload(url string, filename string, contentLen int64) error {
 	log.Printf("多线程下载开启,共%d线程", d.concurrentNum)
-	log.Printf("数据总大小:%d", contentLen)
+	log.Printf("数据总大小:%s", utils.FormatFileSize(contentLen))
 	d.setBar(contentLen)
 	partSize := contentLen / int64(d.concurrentNum)
-	log.Printf("每块数据大小:%d", partSize)
 
 	// 创建部分文件的存放目录
 	partDir := d.getPartDir(filename)
@@ -69,7 +70,9 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 			if i == d.concurrentNum-1 {
 				rangeEnd = contentLen - 1
 			}
-			log.Printf("线程%d,起始长度%d,结束长度%d", i, rangeStart, rangeEnd)
+			if d.detail {
+				log.Printf("线程%d,起始长度%d,结束长度%d", i, rangeStart, rangeEnd)
+			}
 			var downloaded int64
 			if d.resume {
 				partFilename := d.getPartFilename(filename, i)
@@ -93,7 +96,7 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 		log.Fatal(err)
 	}
 	_ = d.bar.Finish()
-	log.Println("下载完成!")
+	log.Println("\n下载完成!")
 	return nil
 }
 
@@ -114,7 +117,7 @@ func (d *Downloader) singleDownload(url string, filename string) error {
 	d.setBar(resp.ContentLength)
 
 	fileDir := path.Dir(filename)
-	if !d.isExist(fileDir) {
+	if !utils.IsExist(fileDir) {
 		_ = os.MkdirAll(fileDir, 0777)
 	}
 	flags := os.O_CREATE | os.O_WRONLY
@@ -184,7 +187,7 @@ func (d *Downloader) getPartDir(filename string) string {
 	fileDir, basename := filepath.Split(filename)
 	partDir := strings.SplitN(basename, ".", 2)[0]
 	filePath := filepath.Join(fileDir, partDir)
-	if !d.isExist(filePath) {
+	if !utils.IsExist(filePath) {
 		_ = os.MkdirAll(filePath, 0777)
 	}
 	return filePath
@@ -198,7 +201,9 @@ func (d *Downloader) getPartFilename(filename string, partNum int) string {
 }
 
 func (d *Downloader) mergeFile(filename string) error {
-	log.Println("\n正在整合下载文件...")
+	if d.detail {
+		log.Println("\n正在整合下载文件...")
+	}
 	destFile, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
@@ -233,16 +238,4 @@ func (d *Downloader) setBar(length int64) {
 			BarEnd:        "]",
 		}),
 	)
-}
-
-// isExist 判断所给路径文件/文件夹是否存在(返回true是存在)
-func (d *Downloader) isExist(path string) bool {
-	_, err := os.Stat(path) //os.Stat获取文件信息
-	if err != nil {
-		if os.IsExist(err) {
-			return true
-		}
-		return false
-	}
-	return true
 }

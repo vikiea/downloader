@@ -43,13 +43,20 @@ func main() {
 				Value:   true,
 				Usage:   "Resume download",
 			},
+			&cli.BoolFlag{
+				Name:    "detail",
+				Aliases: []string{"d"},
+				Value:   false,
+				Usage:   "Download details",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			strURL := c.String("url")
 			filename := c.String("output")
 			concurrency := c.Int("concurrency")
 			resume := c.Bool("resume")
-			return NewDownloader(concurrency, resume).Download(strURL, filename)
+			detail := c.Bool("detail")
+			return NewDownloader(concurrency, resume, detail).Download(strURL, filename)
 		},
 		CommandNotFound: func(*cli.Context, string) { panic("没有这个命令哦") },
 		OnUsageError:    func(*cli.Context, error, bool) error { panic("您的用法不对哦") },
