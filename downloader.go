@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/vikieq/downloader/utils"
 	"io"
 	"io/ioutil"
 	"log"
@@ -14,6 +13,8 @@ import (
 	"sync"
 
 	"github.com/k0kubun/go-ansi"
+	"github.com/vikieq/downloader/utils"
+
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -52,7 +53,11 @@ func (d *Downloader) Download(strUrl, filename string) error {
 func (d *Downloader) multiDownload(url string, filename string, contentLen int64) error {
 	log.Printf("多线程下载开启,共%d线程", d.concurrentNum)
 	log.Printf("数据总大小:%s", utils.FormatFileSize(contentLen))
-	d.setBar(contentLen)
+	if d.detail {
+		d.bar = d.getBar(contentLen, fmt.Sprintf("[cyan][%d/%d][reset]downloading...", d.concurrentNum, d.concurrentNum))
+	} else {
+		d.bar = d.getBar(contentLen, fmt.Sprintf("downloading..."))
+	}
 	partSize := contentLen / int64(d.concurrentNum)
 
 	// 创建部分文件的存放目录
@@ -70,13 +75,20 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 		rangeEnd = rangeStart + partSize
 
 		go func(i int, rangeStart, rangeEnd int64) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Fatal("\n啊不好意思,程序崩溃啦,哈哈哈哈哈")
+				}
+			}()
 			defer wg.Done()
 
 			if i == d.concurrentNum-1 {
 				rangeEnd = contentLen - 1
 			}
+			var bar *progressbar.ProgressBar
 			if d.detail {
-				log.Printf("线程%d,起始长度%d,结束长度%d", i, rangeStart, rangeEnd)
+				log.Printf("线程%d,起始长度%#x,结束长度%#x", i, rangeStart, rangeEnd)
+				bar = d.getBar(rangeEnd-rangeStart+1, fmt.Sprintf("[cyan][%d/%d][reset]downloading...", i, d.concurrentNum))
 			}
 			var downloaded int64
 			if d.resume {
@@ -85,9 +97,12 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 				if err == nil {
 					downloaded = int64(len(content))
 				}
+				if d.detail && bar != nil {
+					_ = bar.Add64(downloaded)
+				}
 				_ = d.bar.Add64(downloaded)
 			}
-			d.downloadPartial(url, filename, rangeStart+downloaded, rangeEnd, i)
+			d.downloadPartial(url, filename, rangeStart+downloaded, rangeEnd, i, bar)
 		}(i, rangeStart, rangeEnd)
 
 		rangeStart += partSize + 1
@@ -119,7 +134,7 @@ func (d *Downloader) singleDownload(url string, filename string) error {
 		_ = Body.Close()
 	}(resp.Body)
 
-	d.setBar(resp.ContentLength)
+	d.bar = d.getBar(resp.ContentLength, "downloading...")
 
 	fileDir := path.Dir(filename)
 	if !utils.IsExist(fileDir) {
@@ -147,7 +162,7 @@ func (d *Downloader) singleDownload(url string, filename string) error {
 
 //downloadPartial
 //@Description: 分片下载
-func (d *Downloader) downloadPartial(url string, filename string, rangeStart, rangeEnd int64, i int) {
+func (d *Downloader) downloadPartial(url, filename string, rangeStart, rangeEnd int64, i int, bar *progressbar.ProgressBar) {
 	if rangeStart > rangeEnd {
 		return
 	}
@@ -178,7 +193,14 @@ func (d *Downloader) downloadPartial(url string, filename string, rangeStart, ra
 	}(partFile)
 
 	buf := make([]byte, 32*1024)
-	_, err = io.CopyBuffer(io.MultiWriter(partFile, d.bar), resp.Body, buf)
+	if bar != nil {
+		defer func(bar *progressbar.ProgressBar) {
+			_ = bar.Finish()
+		}(bar)
+		_, err = io.CopyBuffer(io.MultiWriter(partFile, d.bar, bar), resp.Body, buf)
+	} else {
+		_, err = io.CopyBuffer(io.MultiWriter(partFile, d.bar), resp.Body, buf)
+	}
 	if err != nil {
 		if err == io.EOF {
 			return
@@ -227,14 +249,15 @@ func (d *Downloader) mergeFile(filename string) error {
 	return nil
 }
 
-func (d *Downloader) setBar(length int64) {
-	d.bar = progressbar.NewOptions64(
+func (d *Downloader) getBar(length int64, desc string) *progressbar.ProgressBar {
+	return progressbar.NewOptions64(
 		length,
 		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
+		progressbar.OptionUseANSICodes(true),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowBytes(true),
 		progressbar.OptionSetWidth(50),
-		progressbar.OptionSetDescription("downloading..."),
+		progressbar.OptionSetDescription(desc),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]=[reset]",
 			SaucerHead:    "[green]>[reset]",

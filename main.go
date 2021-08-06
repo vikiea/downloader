@@ -17,7 +17,7 @@ func main() {
 		Name:        "多文件下载",
 		HelpName:    "downloader",
 		Usage:       "通过参数控制,实现并发下载",
-		Version:     "v0.0.3",
+		Version:     "v0.0.4",
 		Description: "支持断点续传,多线程并发的酷酷的下载器",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -64,6 +64,11 @@ func main() {
 		Authors:         []*cli.Author{{"vikieq", "flyingqfl@gmail.com"}},
 		ExtraInfo:       func() map[string]string { panic("别瞎搞") },
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Fatal("啊不好意思,程序崩溃啦,哈哈哈哈哈")
+		}
+	}()
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Fatal(err)
