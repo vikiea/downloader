@@ -70,17 +70,18 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 	var wg sync.WaitGroup
 	wg.Add(d.concurrentNum)
 
-	var rangeStart, rangeEnd int64
+	var rangeStart int64
 	for i := 0; i < d.concurrentNum; i++ {
-		rangeEnd = rangeStart + partSize
 
-		go func(i int, rangeStart, rangeEnd int64) {
+		go func(i int, rangeStart int64) {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Fatal("\n啊不好意思,程序崩溃啦,哈哈哈哈哈")
 				}
 			}()
 			defer wg.Done()
+
+			rangeEnd := rangeStart + partSize
 
 			if i == d.concurrentNum-1 {
 				rangeEnd = contentLen - 1
@@ -103,7 +104,10 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 				_ = d.bar.Add64(downloaded)
 			}
 			d.downloadPartial(url, filename, rangeStart+downloaded, rangeEnd, i, bar)
-		}(i, rangeStart, rangeEnd)
+			if d.detail {
+				log.Printf("part%d下载完成\n", i)
+			}
+		}(i, rangeStart)
 
 		rangeStart += partSize + 1
 	}
@@ -116,7 +120,7 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 		log.Fatal(err)
 	}
 	_ = d.bar.Finish()
-	log.Println("\n下载完成!")
+	log.Println("下载完成!")
 	return nil
 }
 
@@ -213,7 +217,7 @@ func (d *Downloader) downloadPartial(url, filename string, rangeStart, rangeEnd 
 func (d *Downloader) getPartDir(filename string) string {
 	fileDir, basename := filepath.Split(filename)
 	partDir := strings.SplitN(basename, ".", 2)[0]
-	filePath := filepath.Join(fileDir, partDir)
+	filePath := filepath.Join(fileDir, partDir+"_tmp")
 	if !utils.IsExist(filePath) {
 		_ = os.MkdirAll(filePath, 0777)
 	}
@@ -229,7 +233,7 @@ func (d *Downloader) getPartFilename(filename string, partNum int) string {
 
 func (d *Downloader) mergeFile(filename string) error {
 	if d.detail {
-		log.Println("\n正在整合下载文件...")
+		fmt.Println("\n正在整合下载文件...")
 	}
 	destFile, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
