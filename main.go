@@ -14,7 +14,7 @@ func main() {
 	concurrentNum := runtime.NumCPU()
 
 	app := &cli.App{
-		Name:        "多文件下载",
+		Name:        "多线程文件下载器",
 		HelpName:    "downloader",
 		Usage:       "通过参数控制,实现并发下载",
 		Version:     "v0.0.4",
