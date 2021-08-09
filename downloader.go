@@ -53,11 +53,7 @@ func (d *Downloader) Download(strUrl, filename string) error {
 func (d *Downloader) multiDownload(url string, filename string, contentLen int64) error {
 	log.Printf("多线程下载开启,共%d线程", d.concurrentNum)
 	log.Printf("数据总大小:%s", utils.FormatFileSize(contentLen))
-	if d.detail {
-		d.bar = d.getBar(contentLen, fmt.Sprintf("[cyan][%d/%d][reset]downloading...", d.concurrentNum, d.concurrentNum))
-	} else {
-		d.bar = d.getBar(contentLen, fmt.Sprintf("downloading..."))
-	}
+	d.bar = d.getBar(contentLen, fmt.Sprintf("[cyan]downloading...[reset]"))
 	partSize := contentLen / int64(d.concurrentNum)
 
 	// 创建部分文件的存放目录
@@ -86,10 +82,8 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 			if i == d.concurrentNum-1 {
 				rangeEnd = contentLen - 1
 			}
-			var bar *progressbar.ProgressBar
 			if d.detail {
 				log.Printf("线程%d,起始长度%#x,结束长度%#x", i, rangeStart, rangeEnd)
-				bar = d.getBar(rangeEnd-rangeStart+1, fmt.Sprintf("[cyan][%d/%d][reset]downloading...", i, d.concurrentNum))
 			}
 			var downloaded int64
 			if d.resume {
@@ -98,12 +92,9 @@ func (d *Downloader) multiDownload(url string, filename string, contentLen int64
 				if err == nil {
 					downloaded = int64(len(content))
 				}
-				if d.detail && bar != nil {
-					_ = bar.Add64(downloaded)
-				}
 				_ = d.bar.Add64(downloaded)
 			}
-			d.downloadPartial(url, filename, rangeStart+downloaded, rangeEnd, i, bar)
+			d.downloadPartial(url, filename, rangeStart+downloaded, rangeEnd, i)
 			if d.detail {
 				log.Printf("part%d下载完成\n", i)
 			}
@@ -166,7 +157,7 @@ func (d *Downloader) singleDownload(url string, filename string) error {
 
 //downloadPartial
 //@Description: 分片下载
-func (d *Downloader) downloadPartial(url, filename string, rangeStart, rangeEnd int64, i int, bar *progressbar.ProgressBar) {
+func (d *Downloader) downloadPartial(url, filename string, rangeStart, rangeEnd int64, i int) {
 	if rangeStart > rangeEnd {
 		return
 	}
@@ -197,14 +188,7 @@ func (d *Downloader) downloadPartial(url, filename string, rangeStart, rangeEnd 
 	}(partFile)
 
 	buf := make([]byte, 32*1024)
-	if bar != nil {
-		defer func(bar *progressbar.ProgressBar) {
-			_ = bar.Finish()
-		}(bar)
-		_, err = io.CopyBuffer(io.MultiWriter(partFile, d.bar, bar), resp.Body, buf)
-	} else {
-		_, err = io.CopyBuffer(io.MultiWriter(partFile, d.bar), resp.Body, buf)
-	}
+	_, err = io.CopyBuffer(io.MultiWriter(partFile, d.bar), resp.Body, buf)
 	if err != nil {
 		if err == io.EOF {
 			return
@@ -228,7 +212,7 @@ func (d *Downloader) getPartDir(filename string) string {
 func (d *Downloader) getPartFilename(filename string, partNum int) string {
 	_, basename := filepath.Split(filename)
 	partDir := d.getPartDir(filename)
-	return fmt.Sprintf("%s/%s-%d", partDir, basename, partNum)
+	return fmt.Sprintf("%s%c%s-%d", partDir, filepath.Separator, basename, partNum)
 }
 
 func (d *Downloader) mergeFile(filename string) error {

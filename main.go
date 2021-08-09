@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -17,7 +18,7 @@ func main() {
 		Name:        "多线程文件下载器",
 		HelpName:    "downloader",
 		Usage:       "通过参数控制,实现并发下载",
-		Version:     "v0.0.4",
+		Version:     "v0.0.5",
 		Description: "支持断点续传,多线程并发的酷酷的下载器",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -62,11 +63,12 @@ func main() {
 		OnUsageError:    func(*cli.Context, error, bool) error { panic("您的用法不对哦") },
 		Compiled:        time.Time{},
 		Authors:         []*cli.Author{{"vikieq", "flyingqfl@gmail.com"}},
-		ExtraInfo:       func() map[string]string { panic("别瞎搞") },
+		ExtraInfo:       func() map[string]string { panic("别瞎搞,简单点儿") },
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			log.Fatal("啊不好意思,程序崩溃啦,哈哈哈哈哈")
+			fmt.Println("err:", r)
+			_ = app.Run([]string{"h"})
 		}
 	}()
 	err := app.Run(os.Args)
